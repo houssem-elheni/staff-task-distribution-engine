@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Arrival Shift Task Distributor</title>
+  <style>
+    :root{
+      --bg:#dbeafe; --panel:#f0f9ff; --muted:#64748b; --accent:#2563eb; --text:#0f172a;
+      --ok:#16a34a; --danger:#dc2626; --line:#cbd5e1;
+    }
+    /* ETA highlight when ETA differs from STA */
+    .eta-warning {
+        color: #ff8800 !important;     /* orange text */
+        border-color: #ff8800 !important; /* orange border */
+    }
+
+    .eta-warning:focus {
+        outline: none !important;
+        border-color: #ff6600 !important; /* darker orange on focus */
+        box-shadow: 0 0 4px #ff6600;
+    }
+
+    html,body{height:100%}
+    body{margin:0;font:14px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial;background:var(--bg);color:var(--text)}
+    .wrap{max-width:1160px;margin:16px auto;padding:0 12px}
+    .card{background:var(--panel);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.12);padding:14px}
+    h1{margin:0 0 10px;color:var(--accent);font-size:18px}
+    .grid{display:grid;grid-template-columns:280px 1fr;gap:16px}
+    .side .row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+    .side .row label{color:var(--muted)}
+    .metric{font-weight:700}
+    .btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-weight:600;cursor:pointer}
+    .btn.secondary{background:#e2e8f0;color:var(--text)}
+    .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+    .btn.small{padding:4px 8px;border-radius:6px}
+    .hint{color:var(--muted);font-size:12px}
+    table{width:100%;border-collapse:collapse}
+    th,td{border-bottom:1px solid var(--line);padding:6px;text-align:center}
+    th{background:#e0f2fe}
+    input[type=text], input[type=number], select, textarea{border:1px solid var(--line);border-radius:6px;padding:4px 6px;background:#fff;color:var(--text)}
+    .toolbar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+    .shifts{display:flex;gap:6px;flex-wrap:wrap}
+    .shift-btn{background:#e0f2fe;border:1px solid #bfdbfe;color:#1e3a8a;padding:5px 10px;border-radius:6px;font-weight:600;cursor:pointer}
+    .shift-btn.active{background:var(--accent);color:#fff}
+    .footer-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+
+    /* Modal */
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:12px;z-index:20}
+    .modal{background:#fff;color:var(--text);border-radius:12px;max-width:1100px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+    .modal header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+    .modal h2{margin:0;color:var(--accent)}
+    .modal .content{padding:12px 16px}
+    .tabs{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+    .tab{padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:#f8fafc;cursor:pointer;font-weight:600}
+    .tab.active{background:#dbeafe;border-color:#93c5fd}
+    .cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .block{border:1px solid var(--line);border-radius:10px;padding:10px;background:#f8fafc}
+    .list{display:flex;gap:6px;flex-wrap:wrap}
+    .chip{display:inline-flex;align-items:center;gap:6px;border:1px solid #cbd5e1;background:#fff;border-radius:999px;padding:3px 8px}
+    .chip .x{cursor:pointer;font-weight:700}
+    .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+    .teams-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+    .teams-grid h4{margin:0 0 6px;color:#0f172a;cursor:pointer}
+    .small{font-size:12px;color:var(--muted)}
+    .scroll{max-height:320px;overflow:auto}
+    .wide{max-height:420px}
+    .row-flex{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .muted{color:var(--muted)}
+
+    /* Styling for parking position column */
+    td.parking-cell{
+      color: var(--accent);
+      font-weight:600;
+    }
+
+    /* Styling for slot label (flight slot) */
+    .slot-label{
+      color: #e66a00;
+      font-weight:600;
+      margin-right:4px;
+      white-space:nowrap;
+    }
+    /* Branding lines */
+    .brand {
+      margin-top:10px;
+      text-align:center;
+    }
+    .brand-line1 {
+      color: var(--accent);
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .brand-line2 {
+      color: var(--accent);
+      font-size: 12px;
+    }
+
+    /* Date picker styling for selecting a date */
+    .date-picker{
+      border:1px solid var(--line);
+      border-radius:6px;
+      padding:4px 6px;
+      background:#fff;
+      color:var(--text);
+    }
+
+    /* Login overlay styling */
+    #loginScreen{
+      position:fixed;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background:rgba(15,23,42,0.60);
+      z-index:30;
+    }
+    .login-card{
+      background:#f9fafb;
+      border-radius:12px;
+      padding:20px 18px 16px;
+      width:100%;
+      max-width:360px;
+      box-shadow:0 8px 24px rgba(0,0,0,0.25);
+    }
+    .login-card h2{
+      margin:0 0 10px;
+      font-size:18px;
+      color:var(--accent);
+      text-align:center;
+    }
+    .login-card label{
+      display:block;
+      font-size:13px;
+      color:var(--muted);
+      margin-bottom:3px;
+    }
+    .login-card input{
+      width:100%;
+      margin-bottom:8px;
+    }
+    .login-card .hint{
+      margin-top:4px;
+      text-align:center;
+      color:var(--muted);
+      font-size:12px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Login overlay -->
+  <div id="loginScreen">
+    <div class="login-card">
+      <h2>Login – Task Distribution</h2>
+      <div style="margin-bottom:8px;font-size:13px;color:var(--muted);text-align:center;">
+        Use the <strong>same email &amp; password</strong> as your Turn Around app.
+      </div>
+      <div>
+        <label for="loginEmail">Email</label>
+        <input type="text" id="loginEmail" />
+      </div>
+      <div>
+        <label for="loginPassword">Password</label>
+        <input type="password" id="loginPassword" />
+      </div>
+      <div style="margin-top:8px;display:flex;justify-content:center;">
+        <button id="btnLogin" class="btn">Login</button>
+      </div>
+      <div class="hint">Access is protected by Firebase Auth.</div>
+    </div>
+  </div>
+
+  <!-- App root (hidden until login) -->
+  <div id="appRoot" style="display:none;">
+  <div class="wrap">
+    <div class="card">
+      <h1>Arrival Shift Task Distributor</h1>
+      <div class="grid">
+        <!-- Sidebar: availability summary + actions -->
+        <aside class="side card" style="padding:10px">
+          <div class="row"><label>Cleaning teams available</label><div class="metric" id="mClean">0</div></div>
+          <div class="row"><label>Loading teams available</label><div class="metric" id="mLoad">0</div></div>
+          <div class="row"><label>Drivers available</label><div class="metric" id="mDrv">0</div></div>
+          <div class="row"><label>Pushback drivers available</label><div class="metric" id="mPush">0</div></div>
+          <div class="row"><label>Dispatchers available</label><div class="metric" id="mDisp">0</div></div>
+          <div class="footer-actions">
+            <button id="btnRecalc" class="btn">Recalculate</button>
+            <button id="btnExport" class="btn secondary">Export to Excel</button>
+            <button id="btnSettings" class="btn ghost">Settings</button>
+          </div>
+          <div class="hint">ETA is used; blank ETA = STA.</div>
+          <!-- Branding: show company and author -->
+          <div class="brand">
+            <div class="brand-line1">TAV-ADP</div>
+            <div class="brand-line2">Houssem Elheni</div>
+          </div>
+        </aside>
+
+        <section>
+          <div class="toolbar">
+            <div class="date-nav">
+              <button id="prevDay" class="btn small secondary">◀</button>
+              <input type="date" id="datePicker" class="date-picker" />
+              <button id="nextDay" class="btn small secondary">▶</button>
+            </div>
+            <div class="shifts" id="shiftButtons"></div>
+            <div class="hint" id="counter"></div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Parking</th>
+                <th>Flight</th>
+                <th>Arrival (STA)</th>
+                <th>ETA</th>
+                <th>CLN_TEAM</th>
+                <th>LOAD_TEAM</th>
+                <th>DRIVER</th>
+                <th>PUSHBACK</th>
+                <th>DISPATCHER</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+          <!-- Summary of missing assignments across all flights -->
+          <div id="missingSummary" class="small" style="margin-top:6px"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div id="settingsOverlay" class="overlay">
+    <div class="modal">
+      <header>
+        <h2>Settings</h2>
+        <div>
+          <button id="closeSettings" class="btn small secondary">Close</button>
+          <button id="saveSettings" class="btn small">Save</button>
+        </div>
+      </header>
+      <div class="content">
+        <div class="tabs">
+          <button class="tab active" data-tab="staff">Staff</button>
+          <button class="tab" data-tab="teams">Teams</button>
+          <button class="tab" data-tab="availability">Availability</button>
+          <button class="tab" data-tab="rules">Rules</button>
+        </div>
+
+        <!-- Staff tab (cleaners/loaders pools removed) -->
+        <div class="tabview" id="tab-staff">
+          <div class="cols">
+            <div class="block">
+              <h3>Drivers</h3>
+              <div id="list-drivers" class="list scroll"></div>
+              <button class="btn small secondary" data-add="drivers">+ Add</button>
+            </div>
+            <div class="block">
+              <h3>Pushback drivers</h3>
+              <div id="list-pushbacks" class="list scroll"></div>
+              <button class="btn small secondary" data-add="pushbacks">+ Add</button>
+            </div>
+            <div class="block">
+              <h3>Dispatchers</h3>
+              <div id="list-dispatchers" class="list scroll"></div>
+              <button class="btn small secondary" data-add="dispatchers">+ Add</button>
+            </div>
+          </div>
+          <div class="small muted" style="margin-top:6px">Double-click any name to rename. Click × to remove.</div>
+        </div>
+
+        <!-- Teams tab (editable team names + editable member lists) -->
+        <div class="tabview" id="tab-teams" style="display:none">
+          <div class="cols">
+            <div class="block">
+              <h3>Cleaning Teams (A–H)</h3>
+              <div class="teams-grid" id="cleanTeamGrid"></div>
+            </div>
+            <div class="block">
+              <h3>Loading Teams (A–H)</h3>
+              <div class="teams-grid" id="loadTeamGrid"></div>
+            </div>
+          </div>
+          <div class="small muted" style="margin-top:6px">Double-click team title to rename the team. Double-click a member to rename; × to remove; “+ Add” to add.</div>
+        </div>
+
+        <!-- Availability tab (always show all A–H teams) -->
+        <div class="tabview" id="tab-availability" style="display:none">
+          <div class="cols">
+            <div class="block">
+              <h3>Teams available</h3>
+              <div class="cols">
+                <div>
+                  <h4>Cleaning teams</h4>
+                  <div id="availCleanTeams" class="list scroll"></div>
+                </div>
+                <div>
+                  <h4>Loading teams</h4>
+                  <div id="availLoadTeams" class="list scroll"></div>
+                </div>
+              </div>
+            </div>
+            <div class="block">
+              <h3>Staff available</h3>
+              <div class="grid3">
+                <div class="block"><h4>Drivers</h4><div id="availDrivers" class="list scroll"></div></div>
+                <div class="block"><h4>Pushback</h4><div id="availPush" class="list scroll"></div></div>
+                <div class="block"><h4>Dispatchers</h4><div id="availDisp" class="list scroll"></div></div>
+              </div>
+              <div class="small" style="margin-top:6px">Tick what can be used for this shift/day. Counts on the main page are derived from here.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rules tab (unchanged) -->
+        <div class="tabview" id="tab-rules" style="display:none">
+          <div class="grid3">
+            <div class="block">
+              <h3>Cleaning window (relative to ETA)</h3>
+              <label>Start offset (min)</label>
+              <input id="ruleCleaningStart" type="number" value="0" style="width:100%">
+              <label>End offset (min)</label>
+              <input id="ruleCleaningEnd" type="number" value="30" style="width:100%">
+            </div>
+            <div class="block">
+              <h3>Loading window (relative to ETA)</h3>
+              <label>Start offset (min)</label>
+              <input id="ruleLoadingStart" type="number" value="0" style="width:100%">
+              <label>End offset (min)</label>
+              <input id="ruleLoadingEnd" type="number" value="75" style="width:100%">
+            </div>
+            <div class="block">
+              <h3>Driver window (relative to ETA)</h3>
+              <label>Start offset (min)</label>
+              <input id="ruleDriverStart" type="number" value="0" style="width:100%">
+              <label>End offset (min)</label>
+              <input id="ruleDriverEnd" type="number" value="60" style="width:100%">
+            </div>
+            <div class="block">
+              <h3>Dispatcher window (relative to ETA)</h3>
+              <label>Start offset (min)</label>
+              <input id="ruleDispatcherStart" type="number" value="0" style="width:100%">
+              <label>End offset (min)</label>
+              <input id="ruleDispatcherEnd" type="number" value="90" style="width:100%">
+            </div>
+            <div class="block">
+              <h3>Pushback window (relative to ETA)</h3>
+              <label>Start offset (min)</label>
+              <input id="rulePushStart" type="number" value="40" style="width:100%">
+              <label>End offset (min)</label>
+              <input id="rulePushEnd" type="number" value="60" style="width:100%">
+              <div class="small">e.g. 40–60 = pushback can start any time in this interval.</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { firebaseConfig as externalConfig } from "./firebase-config.js";
+    import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js";
+    import { getDatabase, ref, onValue, get, child } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-database.js";
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
+
+    // Firebase configuration
+    // Real credentials are intentionally omitted for security reasons.
+    // See firebase-config.example.js for the expected structure.
+    const firebaseConfig = externalConfig || {
+      apiKey: "REPLACE_WITH_YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      databaseURL: "https://YOUR_PROJECT.firebaseio.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    const app = getApps().length? getApp(): initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    // Reference to roster availability root in Firebase
+    const rosterRootRef = ref(db, 'rosterAvailability');
+
+    // ===== Roster availability listener =====
+    // We maintain a single listener per selected date to detect roster changes in real time.
+    // When data under /rosterAvailability/{date} changes, this listener will trigger
+    // loadRosterAvailability() to recompute availability lists.  This ensures that
+    // updates published from the roster app are reflected immediately in the Task
+    // Distribution UI without requiring manual refresh.
+    let rosterListenerOff = null;
+    function watchRosterForDate(dateKey){
+      // Unsubscribe from the previous date listener if one exists
+      if (typeof rosterListenerOff === 'function') {
+        rosterListenerOff();
+        rosterListenerOff = null;
+      }
+      if (!dateKey) return;
+      const dRef = ref(db, 'rosterAvailability/' + dateKey);
+      rosterListenerOff = onValue(dRef, () => {
+        loadRosterAvailability();
+      });
+    }
+
+    // ===== State =====
+    const state = {
+      selectedDate: new Date().toISOString().slice(0,10),
+      activeShift: null,
+      allFlights: [],
+      // Manual ETA overrides: { [date]: { [flight_id]: 'HH:MM' or '' to revert to STA } }
+      manualETA: {},
+      rules: { cleaningStart:0, cleaningEnd:30, loadingStart:0, loadingEnd:75, driverStart:0, driverEnd:60, dispatcherStart:0, dispatcherEnd:90, pushStart:40, pushEnd:60 },
+
+      // Staff pools (only these three now)
+      people: { drivers:[], pushbacks:[], dispatchers:[] },
+
+      // Team member rosters (A–H arrays)
+      teams: { cleaning:{}, loading:{} }, // e.g., {A:["Name1"], ...}
+
+      // Team labels (editable display names)
+      teamLabels: { cleaning:{}, loading:{} }, // e.g., {A:"Team A", ...}
+
+      // Availability
+      available: { drivers:[], pushbacks:[], dispatchers:[], cleanTeams:[], loadTeams:[] },
+      // Map of dispatcher name -> original roster code (for highlighting)
+      availableCodes: {}
+    };
+
+    // ===== Helpers =====
+    const $ = (id)=>document.getElementById(id);
+    const isoToHM = (iso)=>{ if(!iso) return ""; const d=new Date(iso); return isNaN(d)?"":`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` };
+
+    /**
+     * Convert a free‑form ETA string into HH:MM format.  Accepts ISO strings, HH:MM, H:MM
+     * or bare digits (e.g. "1125").  If parsing fails or the input is empty,
+     * falls back to the provided STA value.
+     * @param {string} etaField - ETA value from Firebase (may be ISO, HH:MM, or digits)
+     * @param {string} staHM - The scheduled arrival time in HH:MM format
+     * @returns {string} ETA in HH:MM format
+     */
+    function parseEtaString(etaField, staHM){
+      let etaHM = '';
+      if(etaField){
+        const str = String(etaField).trim();
+        if(str.includes('T')){
+          // Possibly an ISO timestamp
+          etaHM = isoToHM(str) || '';
+        } else {
+          // Remove any non‑digit characters except colon
+          const digitsOnly = str.replace(/[^0-9]/g, '');
+          if(/^\d{1,4}$/.test(digitsOnly)){
+            const padded = digitsOnly.padStart(4,'0');
+            const hh = padded.slice(0, padded.length - 2);
+            const mm = padded.slice(-2);
+            etaHM = `${hh}:${mm}`;
+          } else if(/^\d{1,2}:\d{2}$/.test(str)){
+            // Already HH:MM format
+            etaHM = str;
+          }
+        }
+      }
+      // Fallback to STA if parsing fails or empty
+      if(!etaHM) etaHM = staHM;
+      return etaHM;
+    }
+    const isoToYMD = (iso)=>{ if(!iso) return ""; const d=new Date(iso); return isNaN(d)?"":d.toISOString().slice(0,10) };
+    const parseHM = (hm, base)=>{ if(!hm) return new Date(`${base}T00:00`); const [h,m]=(hm||'').split(":").map(Number); if(Number.isNaN(h)) return new Date(`${base}T00:00`); return new Date(`${base}T${String(h).padStart(2,'0')}:${String(m||0).padStart(2,'0')}`) };
+    const teamKeys = 'ABCDEFGH'.split('');
+
+    const shiftRanges = { Full:[0,24], M2:[6,14], M1:[7,14], M:[8,14], M6:[8,20], D:[8,17], E:[14,20], E5:[14,22], NT:[20,8] };
+
+    // Mapping from Task Distribution shift names to roster codes that qualify as on duty.
+    // Each entry lists the codes that are considered working within the corresponding window.
+    // Mapping of user-selected shift to allowed roster codes.  If a dispatcher is assigned one of the
+    // allowed codes, they are considered on duty in that window.  The group names reflect the
+    // time windows defined in the roster app.  For example, selecting M2 will include dispatchers
+    // with codes M2, M1, M, M6 and D because all of those overlap the morning window (06–14).
+    const SHIFT_CODE_GROUPS = {
+      // Full window includes all codes
+      Full: ['M2','M1','M','M6','D','E','E5','NT'],
+      // Morning window includes all codes whose service window overlaps 06:00–14:00.  This includes
+      // alt codes with base M plus M6 and D.
+      M2:   ['M2','M1','M','M6','D'],
+      M1:   ['M2','M1','M','M6','D'],
+      M:    ['M2','M1','M','M6','D'],
+      // M6 and D cover both morning and evening windows; include all codes from both windows.
+      M6:   ['M2','M1','M','M6','D','E','E5'],
+      // D covers 08:00–17:00 so include morning and early evening codes
+      D:    ['M2','M1','M','M6','D','E','E5'],
+      // Evening window includes codes whose service window overlaps 14:00–20:00.  Include M6 and D as they
+      // extend into the evening.
+      E:    ['M6','D','E','E5'],
+      E5:   ['M6','D','E','E5'],
+      // Night window includes the pure night shift NT and the night portion of E5 (20:00–22:00)
+      NT:   ['NT','E5']
+    };
+
+    // Mapping of user-selected shift to the base roster shift(s) that should be read from
+    // Firebase.  Roster data is stored by base shift (M, E, NT).  When selecting a shift
+    // that spans multiple base shifts (e.g. M6 or D), we need to combine the lists from
+    // both base shifts.  This mapping ensures that the correct base shifts are queried.
+    const SHIFT_BASE_GROUPS = {
+      // Full reads all base shifts
+      Full: ['M','E','NT'],
+      // Morning selections need names from base M and also from base NT for M6 (8–20) which is stored under NT
+      M2:   ['M','NT'],
+      M1:   ['M','NT'],
+      M:    ['M','NT'],
+      // M6 and D cover both morning and evening and M6 is stored under NT, D under M, plus we need base E for
+      // E and E5 names
+      M6:   ['NT','M','E'],
+      D:    ['NT','M','E'],
+      // Evening selections need names from base E plus M6 (NT) and D (M)
+      E:    ['E','NT','M'],
+      E5:   ['E','NT','M'],
+      // Night selections need names from pure night (NT) and the night portion of E5 which is stored under E
+      NT:   ['NT','E']
+    };
+
+    const displayTeamName = (kind, key)=> state.teamLabels[kind]?.[key] || `Team ${key}`;
+
+    /**
+     * Load persisted state (staff, team labels, rosters and availability) from localStorage.
+     * If a saved state is present, it will merge into the current state object.  Missing
+     * properties will remain unchanged so defaults can be applied later.
+     */
+    function loadSavedState(){
+      try{
+        const saved = JSON.parse(localStorage.getItem('taskDistributorState') || '{}');
+        if(saved && typeof saved === 'object'){
+          if(saved.people && typeof saved.people === 'object'){
+            state.people = Object.assign({drivers:[], pushbacks:[], dispatchers:[]}, saved.people);
+          }
+          if(saved.teams && typeof saved.teams === 'object'){
+            state.teams = Object.assign({cleaning:{}, loading:{}}, saved.teams);
+          }
+          if(saved.teamLabels && typeof saved.teamLabels === 'object'){
+            state.teamLabels = Object.assign({cleaning:{}, loading:{}}, saved.teamLabels);
+          }
+          if(saved.available && typeof saved.available === 'object'){
+            // Only update availability for defined keys
+            state.available = Object.assign({drivers:[], pushbacks:[], dispatchers:[], cleanTeams:[], loadTeams:[]}, saved.available);
+          }
+        }
+      }catch(e){
+        console.warn('Failed to load saved state', e);
+      }
+    }
+
+    /**
+     * Persist current staff, teams, team labels and availability to localStorage.  This function
+     * should be called whenever these parts of the state change so that the last combination
+     * is remembered across sessions.  The manual ETA overrides and rules are not persisted here.
+     */
+    function saveState(){
+      const toSave = {
+        people: state.people,
+        teams: state.teams,
+        teamLabels: state.teamLabels,
+        available: state.available,
+      };
+      try{
+        localStorage.setItem('taskDistributorState', JSON.stringify(toSave));
+      }catch(e){
+        console.warn('Failed to save state', e);
+      }
+    }
+
+    function buildShiftButtons(){
+      const c=$('shiftButtons');
+      c.innerHTML="";
+      for(const s of Object.keys(shiftRanges)){
+        const b=document.createElement('button');
+        b.textContent=s;
+        b.className='shift-btn';
+        b.onclick=()=>{
+          state.activeShift = state.activeShift===s ? null : s;
+          // Reload dispatchers when shift changes
+          loadRosterAvailability();
+          safeRender();
+        };
+        c.appendChild(b);
+      }
+    }
+
+    function startFlightsListener(){
+      const r = ref(db, 'flights');
+      onValue(r, (snap) => {
+        try {
+          const data = snap.val() || {};
+          const rows = [];
+          for (const [id, f] of Object.entries(data)) {
+            const sta = f.sta || f.STA || '';
+            const etaField = f.eta || f.ETA || '';
+            const parking  = f.parking || f.PARKING || '';
+            const slot     = f.slot || f.SLOT || f.Slot || '';
+            const staHM = isoToHM(sta);
+            if (!staHM) continue;
+            const date = isoToYMD(sta) || state.selectedDate;
+            // Normalise ETA: convert ISO, HH:MM or digits to HH:MM; fallback to STA if blank
+            let etaHM = parseEtaString(etaField, staHM);
+            // Apply manual override if present
+            const dayMap = state.manualETA[date];
+            if (dayMap && Object.prototype.hasOwnProperty.call(dayMap, id)) {
+              const override = dayMap[id];
+              etaHM = (override === '' ? staHM : override);
+            }
+            // Determine display flight number without date suffix
+            const flightNo = f.flightNumber || (typeof id === 'string' && id.includes('_') ? id.split('_')[0] : id);
+            rows.push({ flight_id: id, flightNo: flightNo, arrival: staHM, eta: etaHM, parking: parking, slot: slot, date });
+          }
+          state.allFlights = rows;
+          safeRender();
+        } catch (e) {
+          console.error('flights parse', e);
+        }
+      });
+    }
+
+    /**
+     * Load available dispatchers from Firebase rosterAvailability for the current date and active shift.
+     * It expects that the roster publish has stored entries by exact shift code (e.g. M, M1, M2, D, E, E5, M6, NT, Full).
+     * If no data is found, it clears the available dispatchers list.
+     * The function also reads the sourceCodes mapping so that the dispatcher code can be shown beside the name.
+     */
+    async function loadRosterAvailability(){
+      const date = state.selectedDate;
+      // When no shift is selected, use 'Full' grouping to include everyone on duty
+      const shift = state.activeShift || 'Full';
+      try {
+        // Determine which base shift groups to read from rosterAvailability.  The
+        // roster stores dispatchers by base shift (M, E, NT).  Some user
+        // selections (e.g. M6 or D) span multiple base shifts.  We aggregate
+        // dispatchers from all relevant base shifts.
+        const bases = SHIFT_BASE_GROUPS[shift] || ['M','E','NT'];
+        const union = new Set();
+        const codes = {};
+        for (const base of bases) {
+          const snap = await get(child(rosterRootRef, `${date}/${base}`));
+          if (snap.exists()) {
+            const val = snap.val() || {};
+            let list = [];
+            // If stored in dispatchers property, use that (legacy format)
+            if (val.dispatchers) {
+              if (Array.isArray(val.dispatchers)) {
+                list = val.dispatchers.filter(Boolean);
+              } else if (typeof val.dispatchers === 'object') {
+                list = Object.values(val.dispatchers).filter(Boolean);
+              }
+            } else if (Array.isArray(val)) {
+              // New format: array of objects or strings under the shift itself
+              list = val.filter(Boolean);
+            } else if (typeof val === 'object' && val !== null) {
+              list = Object.values(val).filter(Boolean);
+            }
+            const src = (val.sourceCodes && typeof val.sourceCodes === 'object') ? val.sourceCodes : {};
+            // Merge names and their codes into union and codes map
+            for (const item of list) {
+              let nm;
+              let cd;
+              if (typeof item === 'string') {
+                nm = item;
+                cd = src && src[nm];
+              } else if (item && typeof item === 'object') {
+                nm = item.name || '';
+                cd = item.code;
+              }
+              if (!nm) continue;
+              union.add(nm);
+              if (cd) {
+                codes[nm] = cd;
+              } else if (src && src[nm]) {
+                codes[nm] = src[nm];
+              }
+            }
+          }
+        }
+        // Convert to array and filter by allowed codes for the selected shift
+        let list = Array.from(union);
+        const allowed = SHIFT_CODE_GROUPS[shift] || [];
+        if (allowed.length && Object.keys(codes).length > 0) {
+          list = list.filter(nm => {
+            const cd = codes[nm];
+            return !cd || allowed.includes(cd);
+          });
+        }
+        // Update the global dispatcher list so that new names appear in availability editors
+        if (Array.isArray(state.people.dispatchers)) {
+          const combined = new Set(state.people.dispatchers);
+          list.forEach(nm => combined.add(nm));
+          state.people.dispatchers = Array.from(combined);
+        }
+        state.available.dispatchers = list;
+        state.availableCodes = codes;
+      } catch(err) {
+        console.warn('Failed to load roster availability', err);
+        state.available.dispatchers = [];
+        state.availableCodes = {};
+      }
+      updateMetrics();
+      safeRender();
+    }
+
+    function filterByShift(day, active){
+      return state.allFlights.filter(f=>{
+        if(!active || active==='Full') return f.date===day;
+        if(active==='NT'){
+          const dt = parseHM(f.eta||f.arrival, f.date);
+          const thisDay = day;
+          const next = new Date(day+'T00:00'); next.setDate(next.getDate()+1); const nextDayStr = next.toISOString().slice(0,10);
+          if(f.date===thisDay) return dt.getHours()>=20; else if(f.date===nextDayStr) return dt.getHours()<8; return false;
+        }
+        if(f.date!==day) return false; const [a,b]=shiftRanges[active]; const h=parseHM(f.eta||f.arrival,f.date).getHours(); if(a<b) return h>=a && h<b; return h>=a || h<b;
+      });
+    }
+
+    // ===== Scheduling (uses labels for display) =====
+    function schedule(flights){
+      const pools = { cleaning:[], loading:[], driver:[], pushback:[], dispatcher:[] };
+
+      // Teams pools come from availability as team KEYS; convert to display labels for assignment output
+      pools.cleaning = state.available.cleanTeams.map(k => displayTeamName('cleaning', k));
+      pools.loading  = state.available.loadTeams.map(k => displayTeamName('loading', k));
+
+      // Staff from availability
+      pools.driver     = [...state.available.drivers];
+      pools.pushback   = [...state.available.pushbacks];
+      pools.dispatcher = [...state.available.dispatchers];
+
+      const avail = {}; const count = {};
+      for(const role of Object.keys(pools)){ avail[role]={}; count[role]={}; for(const t of pools[role]){ avail[role][t]=new Date(0); count[role][t]=0; } }
+
+      const out=[];
+      const sorted = [...flights].sort((a,b)=> parseHM(a.eta||a.arrival, a.date) - parseHM(b.eta||b.arrival, b.date));
+
+      for(const f of sorted){
+        const baseDate = f.date;
+        const flightStart = parseHM(f.eta||f.arrival, baseDate);
+        const rules = state.rules;
+
+        function assign(role, startOffset, endOffset){
+          const startTime = new Date(flightStart.getTime() + startOffset*60000);
+          const endTime   = new Date(flightStart.getTime() + endOffset*60000);
+          let chosen='';
+          const items = Object.entries(avail[role]).sort((a,b)=> (count[role][a[0]]-count[role][b[0]]) || (a[1]-b[1]));
+          for(const [t,freeAt] of items){ if(freeAt <= startTime){ chosen=t; avail[role][t]=endTime; count[role][t]++; break; } }
+          return chosen;
+        }
+
+        const cln  = assign('cleaning',  rules.cleaningStart,  rules.cleaningEnd);
+        const load = assign('loading',   rules.loadingStart,   rules.loadingEnd);
+        const drv  = assign('driver',    rules.driverStart,    rules.driverEnd);
+
+        // Pushback with window
+        // Pushback: use the same fixed window as in the Needed summary
+        const push = assign('pushback', rules.pushStart, rules.driverEnd);
+
+        const disp = assign('dispatcher', rules.dispatcherStart, rules.dispatcherEnd);
+
+        const miss=[]; if(!cln) miss.push('CLN'); if(!load) miss.push('LOAD'); if(!drv) miss.push('DRIVER'); if(!push) miss.push('PUSHBACK'); if(!disp) miss.push('DISPATCHER');
+        out.push({
+          flight_id: f.flight_id,
+          flightNo: f.flightNo,
+          arrival: f.arrival,
+          eta: f.eta,
+          parking: f.parking,
+          slot: f.slot,
+          cleaning: cln,
+          loading: load,
+          driver: drv,
+          pushback: push,
+          dispatcher: disp,
+          status: miss.length ? ('Missing: ' + miss.join(', ')) : 'OK',
+          date: f.date,
+          missing: miss
+        });
+      }
+      return out;
+    }
+
+    // ===== UI Rendering =====
+    function render(){
+      const day = state.selectedDate; const active = state.activeShift;
+      const flights = filterByShift(day, active);
+      const sched = schedule(flights);
+      const tb = $('tbody');
+      tb.innerHTML = '';
+      for (const r of sched) {
+        const tr = document.createElement('tr');
+        // Parking position
+        const tdPark = document.createElement('td');
+        tdPark.className = 'parking-cell';
+        tdPark.textContent = r.parking || '';
+        tr.appendChild(tdPark);
+        // Flight number with slot label (if available)
+        const tdF = document.createElement('td');
+        // Append slot label if present
+        if (r.slot) {
+          const slotSpan = document.createElement('span');
+          slotSpan.className = 'slot-label';
+          slotSpan.textContent = r.slot;
+          tdF.appendChild(slotSpan);
+        }
+        const flightSpan = document.createElement('span');
+        flightSpan.textContent = r.flightNo || r.flight_id;
+        tdF.appendChild(flightSpan);
+        tr.appendChild(tdF);
+        // Scheduled arrival (STA)
+        const tdSta = document.createElement('td');
+        tdSta.textContent = r.arrival;
+        tr.appendChild(tdSta);
+        // ETA editable
+        const tdEta = document.createElement('td');
+        const input = document.createElement('input');
+        input.type = 'text';
+        const displayVal = (r.eta || '').replace(':', '');
+        input.value = displayVal;
+        const etaKey = (r.eta || '').replace(':', '');
+        const staKey = (r.arrival || '').replace(':', '');
+        const hasOverride = etaKey && etaKey !== staKey;
+        if (hasOverride) {
+          input.classList.add('eta-warning');
+        }
+        input.size = 4;
+        input.onkeydown = (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const raw = input.value.trim();
+            const arrivalNoColon = (r.arrival || '').replace(':', '');
+            let newVal = '';
+            if (raw === '' || raw === arrivalNoColon) {
+              newVal = '';
+            } else if (/^\d{1,4}$/.test(raw)) {
+              const padded = raw.padStart(4, '0');
+              const hh = padded.slice(0, padded.length - 2);
+              const mm = padded.slice(-2);
+              newVal = hh + ':' + mm;
+            } else {
+              newVal = r.eta;
+            }
+            const overrideVal = (newVal === r.arrival ? '' : newVal);
+            setManualETA(r.date, r.flight_id, overrideVal);
+            safeRender();
+          }
+        };
+        tdEta.appendChild(input);
+        tr.appendChild(tdEta);
+        // Assigned teams and staff
+        const mkCell = (val) => {
+          const td = document.createElement('td');
+          td.textContent = val || '';
+          return td;
+        };
+        tr.appendChild(mkCell(r.cleaning));
+        tr.appendChild(mkCell(r.loading));
+        tr.appendChild(mkCell(r.driver));
+        tr.appendChild(mkCell(r.pushback));
+        tr.appendChild(mkCell(r.dispatcher));
+        // Status cell
+        const tdStatus = document.createElement('td');
+        tdStatus.textContent = r.status;
+        tdStatus.style.color = (r.status === 'OK') ? 'var(--ok)' : 'var(--danger)';
+        tr.appendChild(tdStatus);
+        tb.appendChild(tr);
+      }
+
+      // Compute the minimum number of resources needed concurrently for each role.  For each
+      // flight in the selected shift, we compute the time window during which each type
+      // of staff (cleaning, loading, driver, pushback, dispatcher) is required based on
+      // the rules configured in settings.  We then compute the maximum overlap (peak
+      // concurrency) across all flights for each role.  This represents the minimum
+      // number of that resource needed to cover the schedule.
+      const neededCounts = { CLN:0, LOAD:0, DRIVER:0, PUSHBACK:0, DISPATCHER:0 };
+      const eventsByRole = { CLN:[], LOAD:[], DRIVER:[], PUSHBACK:[], DISPATCHER:[] };
+      // Map role codes to rule offset keys.  For pushback we use pushStart as start and
+      // driverEnd as the effective end time (pushback drivers typically finish when
+      // driver roles finish).
+      const ruleMap = {
+        CLN: ['cleaningStart','cleaningEnd'],
+        LOAD:['loadingStart','loadingEnd'],
+        DRIVER:['driverStart','driverEnd'],
+        DISPATCHER:['dispatcherStart','dispatcherEnd'],
+        // For pushback, use pushStart and pushEnd offsets directly.  Using driverEnd
+        // here could lead to incorrect overlap calculations if pushEnd differs from
+        // driverEnd in the settings.
+        PUSHBACK:['pushStart','pushEnd']
+      };
+      // Use the same flights array used for scheduling to compute windows
+      // The 'flights' array defined at the top of render() already contains all
+      // flights for the selected day and shift.  Reusing it avoids redeclaring
+      // existing variables and prevents duplicate 'const' declarations.
+      const flightsForSummary = flights;
+      for (const f of flightsForSummary) {
+        const baseDate = f.date;
+        // Determine the reference time for this flight (ETA or STA)
+        const refTime = parseHM(f.eta || f.arrival, f.date);
+        for (const code of Object.keys(eventsByRole)) {
+          const [startKey,endKey] = ruleMap[code];
+          const startOffset = state.rules[startKey];
+          const endOffset   = state.rules[endKey];
+          const startTime   = new Date(refTime.getTime() + startOffset * 60000);
+          const endTime     = new Date(refTime.getTime() + endOffset   * 60000);
+          eventsByRole[code].push({ t: startTime, type: 'start' });
+          eventsByRole[code].push({ t: endTime,   type: 'end'   });
+        }
+      }
+      // For each role, compute maximum overlapping intervals using sweep-line algorithm
+      for (const code of Object.keys(eventsByRole)) {
+        const events = eventsByRole[code];
+        // Sort events by time.  When two events occur at the same moment, we want
+        // end events to be processed before start events so that a resource
+        // finishing at a given time can be reused immediately on the next flight.
+        events.sort((a,b) => {
+          const ta = a.t.getTime();
+          const tb = b.t.getTime();
+          if (ta === tb) {
+            // If both events are at the same timestamp, process 'end' events first
+            // so that concurrency does not artificially increase at exact
+            // boundaries.  Return -1 if a is 'end' and b is 'start', otherwise 1.
+            return a.type === 'end' && b.type === 'start' ? -1 : 1;
+          }
+          return ta - tb;
+        });
+        let count = 0;
+        let max = 0;
+        for (const e of events) {
+          if (e.type === 'start') {
+            count++;
+            if (count > max) max = count;
+          } else {
+            count--;
+          }
+        }
+        neededCounts[code] = max;
+      }
+      // Build summary text
+      const roleNames = {
+        CLN:'cleaning teams',
+        LOAD:'loading teams',
+        DRIVER:'drivers',
+        PUSHBACK:'pushback drivers',
+        DISPATCHER:'dispatchers'
+      };
+      const summaryParts = [];
+      for (const code of Object.keys(neededCounts)) {
+        const count = neededCounts[code];
+        // Build a clearer string per role, e.g. "cleaning teams: 3"
+        summaryParts.push(roleNames[code] + ': ' + count);
+      }
+      const summaryEl = document.getElementById('missingSummary');
+      if (summaryEl) {
+        summaryEl.textContent = 'Needed: ' + summaryParts.join(', ');
+        // Use accent color to highlight but avoid danger red
+        summaryEl.style.color = 'var(--accent)';
+        summaryEl.style.fontWeight = 'bold';
+      }
+      // Update date picker value
+      const dp = document.getElementById('datePicker');
+      if (dp) {
+        dp.value = state.selectedDate;
+      }
+      // Update shift button active states
+      document.querySelectorAll('.shift-btn').forEach((b) => {
+        b.classList.toggle('active', b.textContent === state.activeShift);
+      });
+      // Update flight counter hint
+      const counterEl = $('counter');
+      if (counterEl) {
+        counterEl.textContent = 'Flights: ' + sched.length + (state.activeShift ? ' · Shift ' + state.activeShift : '');
+      }
+
+      // metrics
+      $('mClean').textContent = state.available.cleanTeams.length;
+      $('mLoad').textContent  = state.available.loadTeams.length;
+      $('mDrv').textContent   = state.available.drivers.length;
+      $('mPush').textContent  = state.available.pushbacks.length;
+      $('mDisp').textContent  = state.available.dispatchers.length;
+    }
+    function safeRender(){ try{ render(); } catch(e){ console.error('render crash', e); setTimeout(()=>{ try{ render(); }catch(_e){ console.error('second render fail', _e);} }, 0);} }
+
+    // ===== Date nav =====
+    $('prevDay').onclick=()=>{
+      const d=new Date(state.selectedDate);
+      d.setDate(d.getDate()-1);
+      state.selectedDate=d.toISOString().slice(0,10);
+      // Change listener to new date and reload availability
+      watchRosterForDate(state.selectedDate);
+      loadRosterAvailability();
+      safeRender();
+    };
+    $('nextDay').onclick=()=>{
+      const d=new Date(state.selectedDate);
+      d.setDate(d.getDate()+1);
+      state.selectedDate=d.toISOString().slice(0,10);
+      // Change listener to new date and reload availability
+      watchRosterForDate(state.selectedDate);
+      loadRosterAvailability();
+      safeRender();
+    };
+
+    // ===== Settings modal & tabs =====
+    const overlay = $('settingsOverlay');
+    $('btnSettings').onclick=()=>{ populateSettings(); overlay.style.display='flex'; };
+    $('closeSettings').onclick=()=> overlay.style.display='none';
+    $('saveSettings').onclick=()=>{ saveSettings(); overlay.style.display='none'; safeRender(); };
+    document.querySelectorAll('.tab').forEach(t=> t.onclick=()=>{ document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); t.classList.add('active'); document.querySelectorAll('.tabview').forEach(v=> v.style.display='none'); $("tab-"+t.dataset.tab).style.display='block'; });
+
+    // ===== Seed defaults =====
+    function seedDefaults(){
+      if(state.people.drivers.length) return;
+      // Staff
+      state.people.drivers = ['DRI1','DRI2','DRI3','DRI4'];
+      state.people.pushbacks = ['Pushback A','Pushback B','Pushback C'];
+      // Do not pre‑populate dispatchers with placeholder names.  The roster
+      // application will publish real dispatcher names to Firebase, and
+      // Task Distribution will read them into state.people.dispatchers.
+      state.people.dispatchers = [];
+
+      // Team labels and rosters
+      teamKeys.forEach(k=>{
+        state.teamLabels.cleaning[k] = `Team ${k}`;
+        state.teamLabels.loading[k]  = `Team ${k}`;
+        state.teams.cleaning[k] = []; // fill as you go (real names)
+        state.teams.loading[k]  = [];
+      });
+
+      // Availability defaults
+      state.available.drivers = ['DRI1','DRI2'];
+      state.available.pushbacks = ['Pushback A'];
+      // Leave dispatcher availability empty by default; this will be
+      // populated from the roster data.  Pre‑populating with fake names
+      // would cause extraneous entries to appear in availability lists.
+      state.available.dispatchers = [];
+      state.available.cleanTeams = ['A','B']; // keys
+      state.available.loadTeams  = ['A','B'];
+    }
+
+    // ===== Reusable editors =====
+    function makeChip(name, onRename, onRemove){
+      const el = document.createElement('span'); el.className='chip';
+      const txt = document.createElement('span'); txt.textContent = name;
+      txt.ondblclick = ()=> {
+        const v = prompt('Rename:', txt.textContent);
+        if(v && v.trim()){ onRename(v.trim()); txt.textContent = v.trim(); }
+      };
+      const del = document.createElement('span'); del.className='x'; del.textContent='×';
+      del.onclick = ()=> onRemove();
+      el.appendChild(txt); el.appendChild(del);
+      return el;
+    }
+    function renderNameList(hostId, arrRef){
+      const host=$(hostId); host.innerHTML='';
+      arrRef.forEach((n,i)=>{
+        host.appendChild(makeChip(n,
+          (v)=>{ arrRef[i]=v; updateMetrics(); },
+          ()=>{ arrRef.splice(i,1); renderNameList(hostId, arrRef); updateMetrics(); }
+        ));
+      });
+    }
+    function addButtonHook(){
+      document.querySelectorAll('[data-add]').forEach(btn=>{
+        btn.onclick=()=>{
+          const key = btn.dataset.add; // 'drivers','pushbacks','dispatchers'
+          const v = prompt('Add name:'); if(!v || !v.trim()) return;
+          state.people[key].push(v.trim());
+          renderStaffLists();
+          updateMetrics();
+        };
+      });
+    }
+
+    // ===== Populate Settings =====
+    function populateSettings(){
+      seedDefaults();
+      renderStaffLists();
+      buildTeamsEditors('cleaning','cleanTeamGrid');
+      buildTeamsEditors('loading','loadTeamGrid');
+      buildAvailability();
+      // Rules
+      $('ruleCleaningStart').value = state.rules.cleaningStart; $('ruleCleaningEnd').value = state.rules.cleaningEnd;
+      $('ruleLoadingStart').value  = state.rules.loadingStart;  $('ruleLoadingEnd').value  = state.rules.loadingEnd;
+      $('ruleDriverStart').value   = state.rules.driverStart;   $('ruleDriverEnd').value   = state.rules.driverEnd;
+      $('ruleDispatcherStart').value= state.rules.dispatcherStart; $('ruleDispatcherEnd').value= state.rules.dispatcherEnd;
+      $('rulePushStart').value     = state.rules.pushStart;     $('rulePushEnd').value     = state.rules.pushEnd;
+      updateMetrics();
+    }
+
+    function renderStaffLists(){
+      renderNameList('list-drivers', state.people.drivers);
+      renderNameList('list-pushbacks', state.people.pushbacks);
+      renderNameList('list-dispatchers', state.people.dispatchers);
+      addButtonHook();
+      // Availability staff lists depend on people arrays
+      buildStaffAvailability();
+    }
+
+    function buildTeamsEditors(kind, gridId){
+      const grid=$(gridId); grid.innerHTML='';
+      teamKeys.forEach(key=>{
+        const box=document.createElement('div'); box.className='block';
+        const title=document.createElement('h4');
+        title.textContent = displayTeamName(kind, key);
+        title.ondblclick = ()=>{
+          const v=prompt('Rename team:', title.textContent);
+          if(v && v.trim()){
+            state.teamLabels[kind][key]=v.trim();
+            title.textContent=v.trim();
+            buildAvailability();
+            saveState();
+          }
+        };
+        const members=document.createElement('div'); members.className='list scroll'; members.id=`members-${kind}-${key}`;
+        // render members as chips
+        const arrRef = state.teams[kind][key];
+        arrRef.forEach((n,i)=>{
+          members.appendChild(makeChip(n,
+            (v)=>{ arrRef[i]=v; saveState(); },
+            ()=>{ arrRef.splice(i,1); buildTeamsEditors(kind, gridId); saveState(); }
+          ));
+        });
+        const addBtn=document.createElement('button'); addBtn.className='btn small secondary'; addBtn.textContent='+ Add';
+        addBtn.onclick=()=>{
+          const v=prompt('Add member name:'); if(!v || !v.trim()) return;
+          arrRef.push(v.trim()); buildTeamsEditors(kind, gridId); saveState();
+        };
+        box.appendChild(title); box.appendChild(members); box.appendChild(addBtn);
+        grid.appendChild(box);
+      });
+    }
+
+    // ===== Availability builders =====
+    function buildAvailability(){
+      // Teams: always show A–H with labels; independent of having members
+      const buildTeamChips=(hostId, kind, pickedKeys)=>{
+        const host=$(hostId); host.innerHTML='';
+        teamKeys.forEach(key=>{
+          const name = displayTeamName(kind, key);
+          const label=document.createElement('label'); label.className='chip';
+          const ck=document.createElement('input'); ck.type='checkbox';
+          ck.checked = pickedKeys.includes(key);
+          ck.onchange=()=>{
+            const i=pickedKeys.indexOf(key);
+            if(ck.checked && i<0) pickedKeys.push(key);
+            if(!ck.checked && i>-1) pickedKeys.splice(i,1);
+            updateMetrics();
+          };
+          const span=document.createElement('span'); span.textContent = name;
+          label.appendChild(ck); label.appendChild(span);
+          host.appendChild(label);
+        });
+      };
+      buildTeamChips('availCleanTeams','cleaning', state.available.cleanTeams);
+      buildTeamChips('availLoadTeams','loading',  state.available.loadTeams);
+      // Staff depends on current people lists
+      buildStaffAvailability();
+    }
+
+    function buildStaffAvailability(){
+      const build=(hostId, list, picked)=>{
+        const host=$(hostId); host.innerHTML='';
+        list.forEach(name=>{
+          const label=document.createElement('label'); label.className='chip';
+          const ck=document.createElement('input');
+          ck.type='checkbox';
+          ck.checked=picked.includes(name);
+          ck.onchange=()=>{
+            const i=picked.indexOf(name);
+            if(ck.checked && i<0) picked.push(name);
+            if(!ck.checked && i>-1) picked.splice(i,1);
+            updateMetrics();
+          };
+          // Show the roster code next to dispatcher names.  When a name has a
+          // published shift code, we wrap the code in a span colored
+          // with the accent color.  Otherwise we simply display the name.
+          const nameSpan = document.createElement('span');
+          if (hostId === 'availDisp' && state.availableCodes && state.availableCodes[name]) {
+            const code = state.availableCodes[name];
+            nameSpan.innerHTML = `${name} <span style="color: var(--accent)">(${code})</span>`;
+          } else {
+            nameSpan.textContent = name;
+          }
+          label.appendChild(ck);
+          label.appendChild(nameSpan);
+          host.appendChild(label);
+        });
+      };
+      build('availDrivers', state.people.drivers, state.available.drivers);
+      build('availPush',    state.people.pushbacks, state.available.pushbacks);
+      build('availDisp',    state.people.dispatchers, state.available.dispatchers);
+      updateMetrics();
+    }
+
+    function updateMetrics(){
+      $('mClean').textContent = state.available.cleanTeams.length;
+      $('mLoad').textContent  = state.available.loadTeams.length;
+      $('mDrv').textContent   = state.available.drivers.length;
+      $('mPush').textContent  = state.available.pushbacks.length;
+      $('mDisp').textContent  = state.available.dispatchers.length;
+      // Persist current state of staff, teams and availability to localStorage
+      saveState();
+    }
+
+    /**
+     * Set a manual ETA override for a given flight on a specific date.
+     * A blank value ('') reverts the ETA back to the scheduled STA.
+     * Also updates the in-memory flight record so changes are reflected immediately.
+     * @param {string} date - Date string (YYYY-MM-DD)
+     * @param {string} flight_id - Flight identifier
+     * @param {string} value - New ETA in 'HH:MM' format or '' to revert
+     */
+    function setManualETA(date, flight_id, value){
+      if (!state.manualETA[date]) state.manualETA[date] = {};
+      state.manualETA[date][flight_id] = value;
+      const row = state.allFlights.find((f) => f.date === date && f.flight_id === flight_id);
+      if (row) {
+        row.eta = (value === '' ? row.arrival : value);
+      }
+    }
+
+    function saveSettings(){
+      // Persist rules only (names already in state)
+      const intVal=(id,def)=>{ const v=parseInt($(id).value,10); return Number.isFinite(v)? v: def; };
+      state.rules.cleaningStart    = intVal('ruleCleaningStart', 0);
+      state.rules.cleaningEnd      = intVal('ruleCleaningEnd', 30);
+      state.rules.loadingStart     = intVal('ruleLoadingStart', 0);
+      state.rules.loadingEnd       = intVal('ruleLoadingEnd', 75);
+      state.rules.driverStart      = intVal('ruleDriverStart', 0);
+      state.rules.driverEnd        = intVal('ruleDriverEnd', 60);
+      state.rules.dispatcherStart  = intVal('ruleDispatcherStart', 0);
+      state.rules.dispatcherEnd    = intVal('ruleDispatcherEnd', 90);
+      state.rules.pushStart        = intVal('rulePushStart', 40);
+      state.rules.pushEnd          = intVal('rulePushEnd', 60);
+    }
+
+    // ===== Export (unchanged) =====
+    let XLSX; (async ()=>{ try { XLSX = await import('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'); } catch(e){ console.warn('XLSX import failed', e);} })();
+    $('btnExport').onclick = ()=>{
+      try{
+        const day = state.selectedDate; const flights = filterByShift(day, state.activeShift); const sched = schedule(flights);
+        const rows = sched.map(r=>({
+          Flight: r.flightNo || r.flight_id,
+          Parking: r.parking || '',
+          STA: r.arrival,
+          ETA: r.eta,
+          CLN_TEAM: r.cleaning || '',
+          LOAD_TEAM: r.loading || '',
+          DRIVER: r.driver || '',
+          PUSHBACK: r.pushback || '',
+          DISPATCHER: r.dispatcher || '',
+          STATUS: r.status
+        }));
+        if(!XLSX){ alert('Export library not loaded'); return; }
+        const ws = XLSX.utils.json_to_sheet(rows, { header:["Flight","Parking","STA","ETA","CLN_TEAM","LOAD_TEAM","DRIVER","PUSHBACK","DISPATCHER","STATUS"] });
+        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Assignments');
+        XLSX.writeFile(wb, `assignments_${day}${state.activeShift? '_' + state.activeShift:''}.xlsx`);
+      }catch(e){ console.error('export', e); alert('Export failed'); }
+    };
+
+    // ===== Actions =====
+    $('btnRecalc').onclick = ()=> safeRender();
+
+    // ===== Init =====
+    // Load any saved staff/team/availability state before applying defaults
+    loadSavedState();
+    // Seed defaults if necessary (will not overwrite loaded state)
+    seedDefaults();
+    buildShiftButtons();
+    // startFlightsListener() will be called after successful login (see onAuthStateChanged)
+    // Initialize date picker value and change handler
+    const dpInit = document.getElementById('datePicker');
+    if (dpInit) {
+      dpInit.value = state.selectedDate;
+      dpInit.onchange = () => {
+        state.selectedDate = dpInit.value;
+        // Switch roster listener to the newly selected date
+        watchRosterForDate(state.selectedDate);
+        // Reload dispatchers for the new date
+        loadRosterAvailability();
+        safeRender();
+      };
+    }
+    // Setup Firebase Auth and login handling
+    const auth = getAuth(app);
+    // Sign out any persisted session on page load so that a login is always required.  Without
+    // this, Firebase may silently restore a previous session and bypass the login screen.
+    try {
+      // Call signOut on the auth instance.  This returns a promise; if no user is
+      // signed in it resolves immediately.  We intentionally do not await it here.
+      signOut(auth).catch(() => {});
+    } catch (_e) {
+      // ignore any synchronous errors
+    }
+    document.getElementById('btnLogin').onclick = async () => {
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      if(!email || !password){
+        alert('Please enter email and password');
+        return;
+      }
+      try{
+        await signInWithEmailAndPassword(auth, email, password);
+        // onAuthStateChanged will handle showing the app
+      }catch(e){
+        console.error('Login failed', e);
+        alert('Login failed: ' + (e.code || e.message));
+      }
+    };
+    onAuthStateChanged(auth, (user)=>{
+      if(user){
+        // Hide login screen and show the app
+        document.getElementById('loginScreen').style.display='none';
+        document.getElementById('appRoot').style.display='block';
+        // Start listeners and load roster after login
+        startFlightsListener();
+        loadRosterAvailability();
+        // Start watching roster availability for the selected date
+        watchRosterForDate(state.selectedDate);
+        safeRender();
+      }else{
+        // Show login overlay
+        document.getElementById('appRoot').style.display='none';
+        document.getElementById('loginScreen').style.display='flex';
+      }
+    });
+  </script>
+  </div><!-- end of appRoot -->
+</body>
+</html>
